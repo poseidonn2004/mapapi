@@ -1,3 +1,8 @@
+// main.js (Google Maps + Places version)
+// Ghi chú: index.html phải load Google Maps JS với `libraries=places,geometry`
+// và callback=initMap, ví dụ:
+// <script async defer src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&libraries=places,geometry&callback=initMap"></script>
+
 // =================== DỮ LIỆU: ROUTES / OPERATORS / STOPS ===================
 const ROUTES = [
     {
@@ -20,27 +25,17 @@ const ROUTES = [
                     { id: 103, name: '114 Trần Nhật Duật', lat: 21.0340, lng: 105.8510 }
                 ]
             }
-
         ]
     }
 ];
 
 // =================== CẤU HÌNH ===================
-const ORS_API_KEY = 'eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjYwYzI2ZDZlMDJhNDQ4ZmFhOTM4MzBhMGU1ODc1NDA5IiwiaCI6Im11cm11cjY0In0='; // <-- dán OpenRouteService API key vào nếu có (optional)
-const MAP_CENTER = [21.0, 106.0];
+const ORS_API_KEY = ''; // (optional) nếu muốn dùng OpenRouteService như trước
+const MAP_CENTER = { lat: 21.0, lng: 106.0 };
 const SHORTLIST_N = 3;
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
-// =================== KHỞI TẠO MAP ===================
-const map = L.map('map').setView(MAP_CENTER, 8);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
-
-let stopsLayer = L.layerGroup().addTo(map);
-let userMarker = null;
-let routeLine = null;
-let routeCache = {};
-
-// UI refs
+// UI refs (DOM)
 const logEl = document.getElementById('log');
 const resultText = document.getElementById('resultText');
 const routeSelect = document.getElementById('routeSelect');
@@ -51,7 +46,17 @@ const btnUseGeol = document.getElementById('btnUseGeol');
 const btnFind = document.getElementById('btnFind');
 const suggestionsList = document.getElementById('suggestionsList');
 
-// ========== HELPERS ==========
+// Google Maps vars
+let map;
+let placesService;
+let autocompleteService;
+let geometryService; // not needed as object, use google.maps.geometry.spherical
+let userMarker = null;
+let stopsMarkers = [];
+let routePolyline = null;
+let routeCache = {};
+
+// helpers
 function l(msg) { logEl.value = `${new Date().toLocaleTimeString()} ${msg}\n` + logEl.value; }
 function haversine(a, b) {
     const R = 6371e3, toRad = v => v * Math.PI / 180;
@@ -61,31 +66,70 @@ function haversine(a, b) {
     const c = 2 * Math.atan2(Math.sqrt(sinΔφ * sinΔφ + Math.cos(φ1) * Math.cos(φ2) * sinΔλ * sinΔλ), Math.sqrt(1 - (sinΔφ * sinΔφ + Math.cos(φ1) * Math.cos(φ2) * sinΔλ * sinΔλ)));
     return R * c;
 }
+
+// draw route on map (coords: array of {lat,lng} or [[lat,lng],...])
 function drawRouteOnMap(coords) {
-    if (routeLine) { routeLine.remove(); routeLine = null; }
-    routeLine = L.polyline(coords, { color: 'blue', weight: 4 }).addTo(map);
-    const bounds = L.latLngBounds(coords);
-    if (userMarker) bounds.extend(userMarker.getLatLng());
-    map.fitBounds(bounds, { padding: [40, 40] });
+    // normalize coords
+    const path = coords.map(c => (Array.isArray(c) ? { lat: c[0], lng: c[1] } : { lat: c.lat, lng: c.lng }));
+    if (routePolyline) {
+        routePolyline.setMap(null);
+        routePolyline = null;
+    }
+    routePolyline = new google.maps.Polyline({ path, strokeColor: '#1976d2', strokeOpacity: 0.9, strokeWeight: 5 });
+    routePolyline.setMap(map);
+
+    // bounds
+    const bounds = new google.maps.LatLngBounds();
+    path.forEach(p => bounds.extend(p));
+    if (userMarker) bounds.extend(userMarker.getPosition());
+    map.fitBounds(bounds, 40);
 }
+
 function placeUserMarker(latlng) {
-    if (userMarker) userMarker.remove();
-    userMarker = L.circleMarker([latlng.lat, latlng.lng], { radius: 6, color: '#1e88e5', fillColor: '#1e88e5', fillOpacity: 1, weight: 1 })
-        .addTo(map).bindPopup('Bạn');
-    map.setView([latlng.lat, latlng.lng], 12);
+    const pos = new google.maps.LatLng(latlng.lat, latlng.lng);
+    if (userMarker) userMarker.setPosition(pos);
+    else {
+        userMarker = new google.maps.Marker({
+            position: pos,
+            map,
+            title: 'Bạn',
+            icon: { path: google.maps.SymbolPath.CIRCLE, scale: 6, fillColor: '#1e88e5', fillOpacity: 1, strokeColor: '#fff', strokeWeight: 1 }
+        });
+    }
+    map.setCenter(pos);
+    map.setZoom(13);
 }
+
 function estimateDurationFromCoords(coords) {
+    // sum haversine distances, convert to seconds at ~40 km/h
     if (!coords || coords.length < 2) return null;
     let m = 0;
     for (let i = 1; i < coords.length; i++) {
-        const a = { lat: coords[i - 1][0], lng: coords[i - 1][1] };
-        const b = { lat: coords[i][0], lng: coords[i][1] };
+        const a = Array.isArray(coords[i - 1]) ? { lat: coords[i - 1][0], lng: coords[i - 1][1] } : coords[i - 1];
+        const b = Array.isArray(coords[i]) ? { lat: coords[i][0], lng: coords[i][1] } : coords[i];
         m += haversine(a, b);
     }
     return m / 11.11; // meters / 11.11 m/s (~40 km/h)
 }
 
-// ========== INIT selects ==========
+// =================== INIT map & services (callback) ===================
+window.initMap = function () {
+    map = new google.maps.Map(document.getElementById('map'), {
+        center: MAP_CENTER,
+        zoom: 8,
+        mapTypeControl: false
+    });
+
+    placesService = new google.maps.places.PlacesService(map);
+    autocompleteService = new google.maps.places.AutocompleteService();
+
+    initRouteOptions();
+    attachUI();
+    loadStopsForSelection();
+    l('Google Maps initialized');
+};
+
+// =================== SELECTS / UI ===================
 function initRouteOptions() {
     routeSelect.innerHTML = '';
     ROUTES.forEach(r => {
@@ -111,76 +155,31 @@ function populateOperators() {
     });
     loadStopsForSelection();
 }
+function clearStopsMarkers() {
+    stopsMarkers.forEach(m => m.setMap(null));
+    stopsMarkers = [];
+}
 function loadStopsForSelection() {
-    stopsLayer.clearLayers();
+    clearStopsMarkers();
     const r = ROUTES.find(x => x.id === routeSelect.value);
     if (!r) return;
     const op = r.operators.find(o => o.id === operatorSelect.value) || r.operators[0];
     const dir = directionSelect.value || 'AB';
     const stops = dir === 'AB' ? (op.stopsAB || []) : (op.stopsBA || op.stopsAB.slice().reverse());
-    stops.forEach(s => L.marker([s.lat, s.lng]).addTo(stopsLayer).bindPopup(s.name));
-    if (stops.length) map.fitBounds(stops.map(s => [s.lat, s.lng]), { padding: [40, 40] });
-}
-
-// attach events for selects
-routeSelect.addEventListener('change', onRouteChange);
-directionSelect.addEventListener('change', loadStopsForSelection);
-operatorSelect.addEventListener('change', loadStopsForSelection);
-
-// initial
-initRouteOptions();
-routeSelect.value = ROUTES[0].id;
-directionSelect.value = 'AB';
-
-// ========== GEOCODING (Nominatim) ==========
-async function nominatimSearch(q, limit = 5) {
-    if (!q || q.trim().length < 2) return [];
-    const viewbox = getViewboxForCurrentRoute();
-    let url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=${limit}&addressdetails=0`;
-    if (viewbox) url += `&viewbox=${viewbox}&bounded=1`;
-    const res = await fetch(url, { headers: { 'Accept-Language': 'vi' } });
-    if (!res.ok) return [];
-    return await res.json();
-}
-async function geocodeNominatimSingle(q) {
-    const arr = await nominatimSearch(q, 1);
-    if (!arr || arr.length === 0) throw 'Không tìm thấy địa chỉ';
-    return { lat: parseFloat(arr[0].lat), lng: parseFloat(arr[0].lon), display_name: arr[0].display_name };
-}
-function getViewboxForCurrentRoute() {
-    try {
-        const r = ROUTES.find(x => x.id === routeSelect.value);
-        if (!r) return null;
-        const op = r.operators.find(o => o.id === operatorSelect.value) || r.operators[0];
-        const dir = directionSelect.value || 'AB';
-        const stops = dir === 'AB' ? (op.stopsAB || []) : (op.stopsBA || op.stopsAB.slice().reverse());
-        if (!stops || stops.length === 0) return null;
-        const lats = stops.map(s => s.lat), lngs = stops.map(s => s.lng);
-        const top = Math.max(...lats), bottom = Math.min(...lats), left = Math.min(...lngs), right = Math.max(...lngs);
-        const padLat = (top - bottom) * 0.2 + 0.02, padLng = (right - left) * 0.2 + 0.02;
-        const vLeft = (left - padLng).toFixed(6), vTop = (top + padLat).toFixed(6), vRight = (right + padLng).toFixed(6), vBottom = (bottom - padLat).toFixed(6);
-        return `${vLeft},${vTop},${vRight},${vBottom}`;
-    } catch (e) { return null; }
-}
-
-// ========== ORS route request ==========
-async function requestORSRoute(origin, dest) {
-    if (!ORS_API_KEY) throw 'NO_ORS_KEY';
-    const url = 'https://api.openrouteservice.org/v2/directions/driving-car/geojson';
-    const body = { coordinates: [[origin.lng, origin.lat], [dest.lng, dest.lat]] };
-    const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': ORS_API_KEY },
-        body: JSON.stringify(body)
+    stops.forEach(s => {
+        const m = new google.maps.Marker({ position: { lat: s.lat, lng: s.lng }, map, title: s.name });
+        const infow = new google.maps.InfoWindow({ content: `<strong>${s.name}</strong>` });
+        m.addListener('click', () => infow.open(map, m));
+        stopsMarkers.push(m);
     });
-    if (!res.ok) throw `ORS lỗi ${res.status}`;
-    const data = await res.json();
-    const coords = data.features[0].geometry.coordinates.map(c => [c[1], c[0]]);
-    const summary = data.features[0].properties?.summary || null;
-    return { coords, summary, raw: data };
+    if (stops.length) {
+        const bounds = new google.maps.LatLngBounds();
+        stops.forEach(s => bounds.extend({ lat: s.lat, lng: s.lng }));
+        map.fitBounds(bounds, 40);
+    }
 }
 
-// ========== MAIN: tìm điểm đón gần nhất ==========
+// =================== FIND nearest (main logic) ===================
 async function findNearestByName() {
     resultText.textContent = 'Đang xử lý...';
     try {
@@ -191,7 +190,7 @@ async function findNearestByName() {
         // if dataset lat/lng already stored (from suggestion)
         if (addrInput.dataset.lat && addrInput.dataset.lng) {
             origin = { lat: parseFloat(addrInput.dataset.lat), lng: parseFloat(addrInput.dataset.lng) };
-            l(`Sử dụng tọa độ được chọn: ${origin.lat},${origin.lng}`);
+            l(`Sử dụng tọa độ đã chọn: ${origin.lat},${origin.lng}`);
         } else {
             // lat,lng typed
             if (raw.includes(',') && raw.split(',').length === 2 && !isNaN(raw.split(',')[0])) {
@@ -199,23 +198,22 @@ async function findNearestByName() {
                 origin = { lat: parseFloat(parts[0]), lng: parseFloat(parts[1]) };
                 l(`Parsed coordinates from input: ${origin.lat},${origin.lng}`);
             } else {
-                // geocode by name
-                const g = await geocodeNominatimSingle(raw);
-                origin = { lat: g.lat, lng: g.lng };
-                l(`Geocode result: ${origin.lat},${origin.lng} (${g.display_name})`);
+                // use Places text search to geocode name (bounded by viewbox if possible)
+                origin = await geocodePlaceByText(raw);
+                l(`Geocode Places: ${origin.lat},${origin.lng} (${origin.name || raw})`);
             }
         }
 
         placeUserMarker(origin);
 
-        // get stops for current selection
+        // get stops
         const route = ROUTES.find(r => r.id === routeSelect.value);
         const op = route.operators.find(o => o.id === operatorSelect.value);
         const dir = directionSelect.value || 'AB';
         const stops = dir === 'AB' ? (op.stopsAB || []) : (op.stopsBA || op.stopsAB.slice().reverse());
         if (!stops || stops.length === 0) throw 'Nhà xe chưa có điểm đón cho hướng này';
 
-        // shortlist by haversine
+        // shortlist by straight distance (haversine)
         const arr = stops.map(s => ({ stop: s, d: haversine(origin, { lat: s.lat, lng: s.lng }) }));
         arr.sort((a, b) => a.d - b.d);
         const shortlist = arr.slice(0, Math.min(SHORTLIST_N, arr.length)).map(x => x.stop);
@@ -231,7 +229,7 @@ async function findNearestByName() {
             return;
         }
 
-        // evaluate shortlist: if ORS key present, use ORS sequentially; otherwise fallback to straight distance
+        // Try ORS for accurate routing if key present; else fallback estimate
         let best = null;
         for (const cand of shortlist) {
             try {
@@ -251,7 +249,6 @@ async function findNearestByName() {
 
         if (!best) throw 'Không có route hợp lệ (ORS lỗi hoặc không có fallback).';
 
-        // cache and draw
         routeCache[cacheKey] = { ts: Date.now(), stop: best.stop, coords: best.coords, summary: best.summary };
         drawRouteOnMap(best.coords);
         resultText.textContent = best.stop.name;
@@ -263,42 +260,113 @@ async function findNearestByName() {
 }
 btnFind.addEventListener('click', findNearestByName);
 
-// ========== AUTOCOMPLETE (Nominatim) ==========
-function debounce(fn, wait) { let t; return function (...args) { clearTimeout(t); t = setTimeout(() => fn.apply(this, args), wait); }; }
+// =================== Places Geocoding (text search) ===================
+function geocodePlaceByText(q) {
+    return new Promise((resolve, reject) => {
+        if (!placesService) return reject('Places service chưa sẵn sàng');
+        // optionally we can set bounds from current route to bias results
+        const bounds = getBoundsForCurrentRoute();
+        const req = { query: q, fields: ['geometry', 'name', 'formatted_address'] };
+        if (bounds) req.bounds = bounds;
+        // Use findPlaceFromQuery as text -> place with geometry
+        placesService.findPlaceFromQuery(req, (results, status) => {
+            if (status === google.maps.places.PlacesServiceStatus.OK && results && results.length) {
+                const p = results[0];
+                const loc = p.geometry.location;
+                resolve({ lat: loc.lat(), lng: loc.lng(), name: p.name || p.formatted_address });
+            } else {
+                // fallback: use AutocompleteService.getPlacePredictions + getDetails
+                autocompleteService.getPlacePredictions({ input: q, bounds: bounds || null, types: [] }, (preds, st) => {
+                    if (st === google.maps.places.PlacesServiceStatus.OK && preds && preds.length) {
+                        placesService.getDetails({ placeId: preds[0].place_id, fields: ['geometry', 'name', 'formatted_address'] }, (det, st2) => {
+                            if (st2 === google.maps.places.PlacesServiceStatus.OK && det && det.geometry) {
+                                const loc2 = det.geometry.location;
+                                resolve({ lat: loc2.lat(), lng: loc2.lng(), name: det.name || det.formatted_address });
+                            } else reject('Không tìm thấy vị trí (places details)');
+                        });
+                    } else reject('Không tìm thấy vị trí (places text search)');
+                });
+            }
+        });
+    });
+}
 
+// bounds helper for Places bias
+function getBoundsForCurrentRoute() {
+    try {
+        const r = ROUTES.find(x => x.id === routeSelect.value);
+        if (!r) return null;
+        const op = r.operators.find(o => o.id === operatorSelect.value) || r.operators[0];
+        const dir = directionSelect.value || 'AB';
+        const stops = dir === 'AB' ? (op.stopsAB || []) : (op.stopsBA || op.stopsAB.slice().reverse());
+        if (!stops || stops.length === 0) return null;
+        const bounds = new google.maps.LatLngBounds();
+        stops.forEach(s => bounds.extend({ lat: s.lat, lng: s.lng }));
+        return bounds;
+    } catch (e) { return null; }
+}
+
+// =================== Autocomplete UI (use AutocompleteService predictions) ===================
 function showSuggestions(items) {
     suggestionsList.innerHTML = '';
     if (!items || items.length === 0) { suggestionsList.style.display = 'none'; return; }
     items.forEach(it => {
         const li = document.createElement('li');
-        li.textContent = it.display_name || it.name || `${it.lat},${it.lon}`;
-        li.dataset.lat = it.lat; li.dataset.lon = it.lon;
-        li.addEventListener('click', () => {
-            addrInput.value = li.textContent;
-            addrInput.dataset.lat = li.dataset.lat; addrInput.dataset.lng = li.dataset.lon;
-            suggestionsList.style.display = 'none';
-            setTimeout(() => findNearestByName(), 150);
+        li.textContent = it.description || it.name || '';
+        li.dataset.placeId = it.place_id || '';
+        li.addEventListener('click', async () => {
+            // on select: get details
+            if (li.dataset.placeId) {
+                placesService.getDetails({ placeId: li.dataset.placeId, fields: ['geometry', 'name', 'formatted_address'] }, (det, st) => {
+                    if (st === google.maps.places.PlacesServiceStatus.OK && det && det.geometry) {
+                        const loc = det.geometry.location;
+                        addrInput.value = li.textContent;
+                        addrInput.dataset.lat = loc.lat();
+                        addrInput.dataset.lng = loc.lng();
+                        suggestionsList.style.display = 'none';
+                        setTimeout(() => findNearestByName(), 150);
+                    } else {
+                        // fallback: use text search
+                        addrInput.value = li.textContent;
+                        suggestionsList.style.display = 'none';
+                        setTimeout(() => findNearestByName(), 150);
+                    }
+                });
+            } else {
+                addrInput.value = li.textContent;
+                suggestionsList.style.display = 'none';
+                setTimeout(() => findNearestByName(), 150);
+            }
         });
         suggestionsList.appendChild(li);
     });
     suggestionsList.style.display = 'block';
 }
 
-document.addEventListener('click', (e) => {
-    const s = document.getElementById('suggestions');
-    if (!s.contains(e.target) && e.target !== addrInput) suggestionsList.style.display = 'none';
-});
+function debounce(fn, wait) { let t; return function (...args) { clearTimeout(t); t = setTimeout(() => fn.apply(this, args), wait); }; }
 
 const handleInput = debounce(async () => {
     const q = addrInput.value.trim();
     delete addrInput.dataset.lat; delete addrInput.dataset.lng;
     if (!q || q.length < 2) { showSuggestions([]); return; }
-    try { l(`Autocomplete: "${q}"`); const list = await nominatimSearch(q); showSuggestions(list); } catch (e) { console.warn(e); showSuggestions([]); }
-}, 300);
+    l(`Autocomplete (places): "${q}"`);
+    const bounds = getBoundsForCurrentRoute();
+    autocompleteService.getPlacePredictions({ input: q, bounds: bounds || null, types: [] }, (preds, st) => {
+        if (st === google.maps.places.PlacesServiceStatus.OK && preds && preds.length) {
+            showSuggestions(preds);
+        } else {
+            showSuggestions([]); // nothing
+        }
+    });
+}, 250);
 
 addrInput.addEventListener('input', handleInput);
+document.addEventListener('click', (e) => {
+    const s = document.getElementById('suggestions');
+    if (!s.contains(e.target) && e.target !== addrInput) suggestionsList.style.display = 'none';
+});
 
-// keyboard nav for suggestions
+// keyboard nav for suggestions (simple)
 let focusedIndex = -1;
 addrInput.addEventListener('keydown', (ev) => {
     const items = suggestionsList.querySelectorAll('li');
@@ -308,7 +376,7 @@ addrInput.addEventListener('keydown', (ev) => {
     else if (ev.key === 'Enter') { if (focusedIndex >= 0 && items[focusedIndex]) { ev.preventDefault(); items[focusedIndex].click(); focusedIndex = -1; } }
 });
 
-// ========== GEOLOCATION BUTTON ==========
+// =================== GEOLOCATION button ===================
 btnUseGeol.addEventListener('click', () => {
     if (!navigator.geolocation) return alert('Trình duyệt không hỗ trợ Geolocation');
     navigator.geolocation.getCurrentPosition(p => {
@@ -318,3 +386,28 @@ btnUseGeol.addEventListener('click', () => {
         placeUserMarker({ lat, lng });
     }, err => alert('Không lấy được vị trí: ' + err.message));
 });
+
+// =================== ORS helper (kept from original, optional) ===================
+async function requestORSRoute(origin, dest) {
+    if (!ORS_API_KEY) throw 'NO_ORS_KEY';
+    const url = 'https://api.openrouteservice.org/v2/directions/driving-car/geojson';
+    const body = { coordinates: [[origin.lng, origin.lat], [dest.lng, dest.lat]] };
+    const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': ORS_API_KEY },
+        body: JSON.stringify(body)
+    });
+    if (!res.ok) throw `ORS lỗi ${res.status}`;
+    const data = await res.json();
+    const coords = data.features[0].geometry.coordinates.map(c => ({ lat: c[1], lng: c[0] }));
+    const summary = data.features[0].properties?.summary || null;
+    return { coords, summary, raw: data };
+}
+
+// =================== Attach events ===================
+function attachUI() {
+    routeSelect.addEventListener('change', onRouteChange);
+    directionSelect.addEventListener('change', loadStopsForSelection);
+    operatorSelect.addEventListener('change', loadStopsForSelection);
+    // Note: btnFind already attached above
+}

@@ -3,8 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Map Demo - Tuyến & Nhà xe (Autocomplete)</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+  <title>Map Demo - Tuyến & Nhà xe (Google Maps)</title>
   <style>
     :root { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; }
     html, body { height:100%; margin:0; padding:0; }
@@ -53,6 +52,7 @@
 
       <div class="row" style="margin-top:8px;">
         <button id="btnFind">Tìm điểm đón gần nhất</button>
+        <button id="btnUseGeol" class="secondary" title="Dùng vị trí hiện tại">Vị trí hiện tại</button>
       </div>
 
       <div id="resultBox">
@@ -63,7 +63,7 @@
       <div style="margin-top:12px;">
         <label>Log / Thông tin</label>
         <textarea id="log" rows="6" readonly></textarea>
-        </div>
+      </div>
     </div>
 
     <div id="right">
@@ -71,7 +71,14 @@
     </div>
   </div>
 
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <!-- Google Maps JS: thay API key bên dưới bằng key của bạn -->
+  <script
+    async
+    defer
+    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBcts1mCTMYuGX7H70P8sCyJFG6ANN89YA&libraries=places,geometry&language=vi&callback=initMap">
+  </script>
+
+  <!-- main.js: ghi đè file main.js của bạn bằng mã mình đã gửi trước đó -->
   <script src="main.js"></script>
 </body>
 </html>
