@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Map Demo - Tuyến & Nhà xe (Autocomplete)</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+  <style>
+    :root { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; }
+    html, body { height:100%; margin:0; padding:0; }
+    #container { display:flex; height:100vh; gap:0; }
+    #left { width:50%; min-width:320px; box-sizing:border-box; padding:16px; background:#fafafa; overflow:auto; }
+    #right { width:50%; box-sizing:border-box; }
+    #map { height:100%; width:100%; }
+
+    h2 { margin:6px 0 12px 0; font-size:18px; }
+    label { display:block; margin-top:8px; font-weight:600; }
+    select, input[type="text"], textarea { width:100%; padding:8px; margin-top:6px; box-sizing:border-box; font-size:14px; border:1px solid #ddd; border-radius:6px; }
+    .row { display:flex; gap:8px; align-items:center; margin-top:10px; }
+    button { padding:8px 12px; border-radius:6px; border:1px solid #1976d2; background:#1976d2; color:white; cursor:pointer; }
+    button.secondary { background:#fff; color:#1976d2; border:1px solid #1976d2; }
+    #resultBox { margin-top:12px; padding:10px; background:#fff; border:1px solid #eee; border-radius:6px; min-height:48px; }
+    small.note { color:#666; display:block; margin-top:6px; }
+
+    /* suggestions */
+    #suggestions { position:relative; margin-top:6px; }
+    #suggestionsList { position:absolute; z-index:9999; background:#fff; border:1px solid #ddd; width:100%; list-style:none; margin:4px 0 0 0; padding:0; display:none; max-height:240px; overflow:auto; box-shadow:0 6px 12px rgba(0,0,0,0.08); border-radius:6px; }
+    #suggestionsList li { padding:8px; cursor:pointer; border-bottom:1px solid #f1f1f1; }
+    #suggestionsList li:hover { background:#eef6ff; }
+
+    .muted { color:#000000; font-size:20px; }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <div id="left">
+      <h2>Chọn tuyến & nhà xe — nhập địa điểm (theo tên)</h2>
+
+      <label for="routeSelect">Tuyến</label>
+      <select id="routeSelect"></select>
+
+      <label for="directionSelect">Hướng</label>
+      <select id="directionSelect"></select>
+
+      <label for="operatorSelect">Nhà xe</label>
+      <select id="operatorSelect"></select>
+
+      <label for="addr">Nhập địa điểm khách (ví dụ: "Bến xe Giáp Bát", "Sân bay Nội Bài")</label>
+      <div id="suggestions">
+        <input type="text" id="addr" placeholder="Nhập tên địa điểm..." autocomplete="off" />
+        <ul id="suggestionsList"></ul>
+      </div>
+
+      <div class="row" style="margin-top:8px;">
+        <button id="btnFind">Tìm điểm đón gần nhất</button>
+      </div>
+
+      <div id="resultBox">
+        <strong>Kết quả:</strong>
+        <div id="resultText" class="muted">Chưa có kết quả</div>
+      </div>
+
+      <div style="margin-top:12px;">
+        <label>Log / Thông tin</label>
+        <textarea id="log" rows="6" readonly></textarea>
+        </div>
+    </div>
+
+    <div id="right">
+      <div id="map"></div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="main.js"></script>
+</body>
+</html>
