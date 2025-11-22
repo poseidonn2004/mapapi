@@ -14,26 +14,86 @@ const ROUTES = [
         id: 'saoviet',
         name: 'Nhà xe Sao Việt',
         stopsAB: [
-          { id: 1, name: '114 Trần Nhật Duật', lat: 21.0340, lng: 105.8510 },
-          { id: 2, name: '789 Giải Phóng', lat: 21.0050, lng: 105.8560 },
-          { id: 3, name: '07 Phạm Văn Đồng', lat: 21.0335, lng: 105.7890 }
+          { id: 1, name: '114 Trần Nhật Duật', lat: 21.036052898418976, lng: 105.85387432227655 },
+          { id: 2, name: '789 Giải Phóng', lat: 20.98606785846243, lng: 105.84129697994503 },
+          { id: 3, name: '07 Phạm Văn Đồng', lat: 21.055137831264652, lng: 105.78312515295703 }
         ],
         stopsBA: [
-          { id: 101, name: '07 Phạm Văn Đồng', lat: 21.0335, lng: 105.7890 },
-          { id: 102, name: '789 Giải Phóng', lat: 21.0050, lng: 105.8560 },
-          { id: 103, name: '114 Trần Nhật Duật', lat: 21.0340, lng: 105.8510 }
+          { id: 101, name: '114 Trần Nhật Duật', lat: 21.036052898418976, lng: 105.85387432227655 },
+          { id: 102, name: '789 Giải Phóng', lat: 20.98606785846243, lng: 105.84129697994503 },
+          { id: 103, name: '07 Phạm Văn Đồng', lat: 21.055137831264652, lng: 105.78312515295703 }
+        ]
+      },
+
+      // Nhà xe Hà Hải (nếu đã thêm trước đó)
+      {
+        id: 'hathai',
+        name: 'Nhà xe Hà Hải',
+        stopsAB: [
+          { id: 201, name: 'Ngõ 105 Khúc Thừa Dụ', lat: 21.030624178435648, lng: 105.79171017994642 },
+          { id: 202, name: '57 Nguyễn Quốc Trị', lat: 21.009371449200128, lng: 105.79127021167335 },
+          { id: 203, name: '255 Lê Duẩn', lat: 21.016402141155513, lng: 105.84158195295583 },
+          { id: 204, name: '247 Giải Phóng', lat: 20.999501206069464, lng: 105.84163289713028 }
+        ],
+        stopsBA: [
+          { id: 301, name: 'Ngõ 105 Khúc Thừa Dụ', lat: 21.030624178435648, lng: 105.79171017994642 },
+          { id: 302, name: '57 Nguyễn Quốc Trị', lat: 21.009371449200128, lng: 105.79127021167335 },
+          { id: 303, name: '255 Lê Duẩn', lat: 21.016402141155513, lng: 105.84158195295583 },
+          { id: 304, name: '247 Giải Phóng', lat: 20.999501206069464, lng: 105.84163289713028 }
+        ]
+      },
+
+      // ========== Nhà Xe Việt Nam (mới thêm) ==========
+      {
+        id: 'vietnam',
+        name: 'Nhà Xe Việt Nam',
+        stopsAB: [
+          { id: 401, name: 'Ngã 3 Nguyễn Quyền x Lê Duẩn', lat: 21.018245096670096, lng: 105.84142076017402 },
+          { id: 402, name: '72 Phố Vọng', lat: 20.997931097996037, lng: 105.84234539817596 },
+          { id: 403, name: 'Số 10 ngõ 15 Ngọc Hồi', lat: 20.96029858304492, lng: 105.84260489528424 },
+          { id: 404, name: 'Số 4 Thọ Tháp (Cầu Giấy)', lat: 21.031381906684786, lng: 105.79091650878145 },
+          { id: 405, name: '43 Nguyễn Quốc Trị', lat: 21.00962379574925, lng: 105.79109121167335 },
+          { id: 406, name: 'KĐT Đô Nghĩa', lat: 20.95729090091334, lng: 105.73733976644913 },
+          { id: 407, name: 'KĐT Dương Nội 2', lat: 20.963180054802393, lng: 105.74609709343935 },
+          { id: 408, name: 'Ngã 4 Văn Phú', lat: 20.96241769787522, lng: 105.76468910604115 },
+          { id: 409, name: 'Ngã 4 Vạn Phúc', lat: 20.982713171993996, lng: 105.77034712411988 },
+          { id: 410, name: 'Roman Plaza', lat: 20.986045319647822, lng: 105.77772394234862 },
+          { id: 411, name: 'Làng Việt Kiều Châu Âu', lat: 20.984409030110395, lng: 105.7858929567034 },
+          { id: 412, name: 'BigC Hà Đông', lat: 20.97926108033217, lng: 105.78562445295479 },
+          { id: 413, name: 'Cầu Đen', lat: 20.97127158029643, lng: 105.78245431062452 },
+          { id: 414, name: 'Bệnh viện K (Tân Triều)', lat: 20.963923502370644, lng: 105.79911675138334 },
+          { id: 415, name: 'Cộng Cafe - Linh Đàm', lat: 20.96358769820079, lng: 105.82574599528432 }
+        ],
+        stopsBA: [
+          { id: 501, name: 'Ngã 3 Nguyễn Quyền x Lê Duẩn', lat: 21.018245096670096, lng: 105.84142076017402 },
+          { id: 502, name: '72 Phố Vọng', lat: 20.997931097996037, lng: 105.84234539817596 },
+          { id: 503, name: 'Số 10 ngõ 15 Ngọc Hồi', lat: 20.96029858304492, lng: 105.84260489528424 },
+          { id: 504, name: 'Số 4 Thọ Tháp (Cầu Giấy)', lat: 21.031381906684786, lng: 105.79091650878145 },
+          { id: 505, name: '43 Nguyễn Quốc Trị', lat: 21.00962379574925, lng: 105.79109121167335 },
+          { id: 506, name: 'KĐT Đô Nghĩa', lat: 20.95729090091334, lng: 105.73733976644913 },
+          { id: 507, name: 'KĐT Dương Nội 2', lat: 20.963180054802393, lng: 105.74609709343935 },
+          { id: 508, name: 'Ngã 4 Văn Phú', lat: 20.96241769787522, lng: 105.76468910604115 },
+          { id: 509, name: 'Ngã 4 Vạn Phúc', lat: 20.982713171993996, lng: 105.77034712411988 },
+          { id: 510, name: 'Roman Plaza', lat: 20.986045319647822, lng: 105.77772394234862 },
+          { id: 511, name: 'Làng Việt Kiều Châu Âu', lat: 20.984409030110395, lng: 105.7858929567034 },
+          { id: 512, name: 'BigC Hà Đông', lat: 20.97926108033217, lng: 105.78562445295479 },
+          { id: 513, name: 'Cầu Đen', lat: 20.97127158029643, lng: 105.78245431062452 },
+          { id: 514, name: 'Bệnh viện K (Tân Triều)', lat: 20.963923502370644, lng: 105.79911675138334 },
+          { id: 515, name: 'Cộng Cafe - Linh Đàm', lat: 20.96358769820079, lng: 105.82574599528432 }
         ]
       }
+
     ]
   }
 ];
+
 
 // =================== CẤU HÌNH ===================
 // Thay API KEY của bạn vào đây:
 const VIETMAP_API_KEY = '0ac4aab085b84c3ed9099ec8d9db9e76e6b65d7b7f7e744e'; // <-- NHỚ THAY
 const ORS_API_KEY = ''; // optional: OpenRouteService key nếu có
 const MAP_CENTER = [21.0, 106.0];
-const SHORTLIST_N = 3;
+const SHORTLIST_N = 4;
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
 // =================== KHỞI TẠO MAP ===================
