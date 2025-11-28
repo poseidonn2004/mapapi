@@ -878,13 +878,36 @@ async function findNearestByName() {
     // cache and draw (single place)
     routeCache[cacheKey] = { ts: Date.now(), stop: best.stop, coords: best.coords, summary: best.summary };
     drawRouteOnMap(best.coords);
-    resultText.textContent = best.stop.name;
-    l(`Chọn: ${best.stop.name} — ~${Math.round((best.summary?.duration || best.duration) / 60)} phút`);
-    // --- END: MATRIX-based selection ---
+    // Tính tổng chiều dài polyline
+    let totalMeters = 0;
+    for (let i = 1; i < best.coords.length; i++) {
+      const a = { lat: best.coords[i - 1][0], lng: best.coords[i - 1][1] };
+      const b = { lat: best.coords[i][0], lng: best.coords[i][1] };
+      totalMeters += haversine(a, b);
+    }
 
+    // đổi sang km
+    const km = (totalMeters / 1000).toFixed(2);
 
-    resultText.textContent = best.stop.name;
-    l(`Chọn: ${best.stop.name} — ~${Math.round((best.summary?.duration || best.duration) / 60)} phút`);
+    // tính thời gian
+    // thời gian VietMap trả về là MILLISECOND → chuyển sang giây
+    let durationSec = null;
+
+    if (best.summary?.duration != null) {
+      durationSec = best.summary.duration / 1000;  // ms → s
+    } else {
+      // fallback nếu không có duration từ API
+      const SPEED = 11.11; // tương đương 40 km/h
+      durationSec = totalMeters / SPEED;
+    }
+
+    const durationMin = Math.round(durationSec / 60);
+
+    // HIỂN THỊ Ở KẾT QUẢ + quãng đường + có thời gian
+    // resultText.innerHTML = `${best.stop.name} — <strong>${km} km</strong> (≈${durationMin} phút)`;
+    // HIỂN THỊ Ở KẾT QUẢ + quãng đường
+    resultText.innerHTML = `${best.stop.name} — <strong>${km} km</strong>`;
+
   } catch (err) {
     resultText.textContent = 'Lỗi: ' + err;
     l('Error: ' + err);
